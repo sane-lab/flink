@@ -1,4 +1,4 @@
-package org.apache.flink.runtime.rescale.metrics;
+package org.apache.flink.streaming.controlplane.rescale.metrics;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.JobGraph;

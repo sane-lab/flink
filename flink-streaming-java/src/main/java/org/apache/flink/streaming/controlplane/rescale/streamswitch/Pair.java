@@ -1,4 +1,4 @@
-package org.apache.flink.runtime.rescale.streamswitch;
+package org.apache.flink.streaming.controlplane.rescale.streamswitch;
 
 import java.io.Serializable;
 

@@ -18,10 +18,13 @@
 
 package org.apache.flink.runtime.rescale;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Map;
@@ -29,16 +32,25 @@ import java.util.Map;
 public abstract class JobGraphRescaler {
 
 	protected final JobGraph jobGraph;
-	protected final ClassLoader userCodeLoader;
+	protected ClassLoader userCodeLoader;
 
-	public JobGraphRescaler(JobGraph jobGraph, ClassLoader userCodeLoader) {
+	public JobGraphRescaler(JobGraph jobGraph, @Nullable ClassLoader userCodeLoader) {
 		this.jobGraph = jobGraph;
 		this.userCodeLoader = userCodeLoader;
 	}
 
-	public abstract void rescale(JobVertexID id, int newParallelism, Map<Integer, List<Integer>> partitionAssignment, List<JobVertexID> involvedUpstream, List<JobVertexID> involvedDownstream);
+	public void setUserCodeLoader(@Nonnull ClassLoader userCodeLoader) {
+		this.userCodeLoader = userCodeLoader;
+	}
 
-	public abstract void repartition(JobVertexID id, Map<Integer, List<Integer>> partitionAssignment, List<JobVertexID> involvedUpstream, List<JobVertexID> involvedDownstream);
+	public abstract Tuple2<List<JobVertexID>, List<JobVertexID>> rescale(
+		JobVertexID id,
+		int newParallelism,
+		Map<Integer, List<Integer>> partitionAssignment);
+
+	public abstract Tuple2<List<JobVertexID>, List<JobVertexID>> repartition(
+		JobVertexID id,
+		Map<Integer, List<Integer>> partitionAssignment);
 
 	public abstract String print(Configuration config);
 

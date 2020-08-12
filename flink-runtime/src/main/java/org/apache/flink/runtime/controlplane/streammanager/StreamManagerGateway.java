@@ -19,11 +19,16 @@
 package org.apache.flink.runtime.controlplane.streammanager;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.executiongraph.JobStatusListener;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmaster.JobMaster;
 import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.registration.RegistrationResponse;
+import org.apache.flink.runtime.rescale.JobRescaleAction;
+import org.apache.flink.runtime.rescale.JobRescalePartitionAssignment;
 import org.apache.flink.runtime.rpc.FencedRpcGateway;
 import org.apache.flink.runtime.rpc.RpcTimeout;
 
@@ -49,6 +54,7 @@ public interface StreamManagerGateway extends FencedRpcGateway<StreamManagerId> 
 		ResourceID jobMasterResourceId,
 		String jobMasterAddress,
 		JobID jobId,
+		ClassLoader userLoader,
 		@RpcTimeout Time timeout);
 
 	/**
@@ -61,4 +67,25 @@ public interface StreamManagerGateway extends FencedRpcGateway<StreamManagerId> 
 		final JobID jobId,
 		final Exception cause);
 
+	void rescaleStreamJob(JobRescaleAction.RescaleParamsWrapper wrapper);
+
+	/**
+	 * The notification from the JobManager that changes completed:
+	 * Maybe 1. Assign states for repartition, 2. Rescale and assign states
+	 * @param targetVertexID the JobVertexID of target vertex
+	 */
+	void streamSwitchCompleted(JobVertexID targetVertexID);
+
+	/**
+	 * This method is called whenever the status of the job changes.
+	 *
+	 * @param jobId         The ID of the job.
+	 * @param newJobStatus  The status the job switched to.
+	 * @param timestamp     The timestamp when the status transition occurred.
+	 * @param error         In case the job status switches to a failure state, this is the
+	 *                      exception that caused the failure.
+	 */
+	void jobStatusChanged(JobID jobId, JobStatus newJobStatus, long timestamp, Throwable error);
+
+//	void notifyStreamSwitchComplete(JobVertexID jobVertexId);
 }

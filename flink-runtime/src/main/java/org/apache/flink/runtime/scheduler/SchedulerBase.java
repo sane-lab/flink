@@ -223,7 +223,12 @@ public abstract class SchedulerBase implements SchedulerNG {
 		this.inputsLocationsRetriever = new ExecutionGraphToInputsLocationsRetrieverAdapter(executionGraph);
 
 		this.jobRescaleCoordinator = new JobRescaleCoordinator(
-			jobGraph, executionGraph, userCodeLoader);
+			jobGraph, executionGraph);
+	}
+
+	@Override
+	public JobRescaleCoordinator getJobRescaleCoordinator() {
+		return jobRescaleCoordinator;
 	}
 
 	private ExecutionGraph createAndRestoreExecutionGraph(
@@ -453,7 +458,7 @@ public abstract class SchedulerBase implements SchedulerNG {
 	@Override
 	public void registerJobStatusListener(final JobStatusListener jobStatusListener) {
 		executionGraph.registerJobStatusListener(jobStatusListener);
-		executionGraph.registerJobStatusListener(jobRescaleCoordinator.createActivatorDeactivator());
+//		executionGraph.registerJobStatusListener(jobRescaleCoordinator.createActivatorDeactivator());
 	}
 
 	@Override

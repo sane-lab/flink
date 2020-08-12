@@ -1,19 +1,15 @@
-package org.apache.flink.runtime.rescale.streamswitch;
+package org.apache.flink.streaming.controlplane.rescale.streamswitch;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
-import org.apache.flink.runtime.rescale.controller.OperatorControllerListener;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
+import org.apache.flink.streaming.controlplane.rescale.controller.OperatorControllerListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
 public class DummyStreamSwitch extends Thread implements FlinkOperatorController {
 

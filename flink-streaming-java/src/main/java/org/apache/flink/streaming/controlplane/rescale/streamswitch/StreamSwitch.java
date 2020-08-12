@@ -1,14 +1,14 @@
-package org.apache.flink.runtime.rescale.streamswitch;
+package org.apache.flink.streaming.controlplane.rescale.streamswitch;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
-import org.apache.flink.runtime.rescale.controller.OperatorControllerListener;
-import org.apache.flink.runtime.rescale.metrics.KafkaMetricsRetriever;
-import org.apache.flink.runtime.rescale.metrics.StockMetricsRetriever;
-import org.apache.flink.runtime.rescale.metrics.StreamSwitchMetricsRetriever;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
+import org.apache.flink.streaming.controlplane.rescale.controller.OperatorControllerListener;
+import org.apache.flink.streaming.controlplane.rescale.metrics.KafkaMetricsRetriever;
+import org.apache.flink.streaming.controlplane.rescale.metrics.StockMetricsRetriever;
+import org.apache.flink.streaming.controlplane.rescale.metrics.StreamSwitchMetricsRetriever;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

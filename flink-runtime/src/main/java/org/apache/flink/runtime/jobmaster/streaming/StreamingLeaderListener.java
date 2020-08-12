@@ -22,6 +22,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.controlplane.streammanager.StreamManagerGateway;
 import org.apache.flink.runtime.controlplane.streammanager.StreamManagerId;
 import org.apache.flink.runtime.jobmaster.JMTMRegistrationSuccess;
+import org.apache.flink.runtime.jobmaster.JobMasterRegistrationSuccess;
 import org.apache.flink.runtime.taskexecutor.JobLeaderService;
 
 /**
@@ -40,7 +41,7 @@ public interface StreamingLeaderListener {
 	 * @param streamManagerGateway to the job leader
 	 * @param registrationMessage containing further registration information
 	 */
-	void streamManagerGainedLeadership(JobID jobId, StreamManagerGateway streamManagerGateway, JMTMRegistrationSuccess registrationMessage);
+	void streamManagerGainedLeadership(JobID jobId, StreamManagerGateway streamManagerGateway, JobMasterRegistrationSuccess registrationMessage);
 
 	/**
 	 * Callback if the job leader for the job with the given job id lost its leadership.

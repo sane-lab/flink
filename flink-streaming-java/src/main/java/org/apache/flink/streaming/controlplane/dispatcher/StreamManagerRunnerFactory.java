@@ -19,6 +19,7 @@
 package org.apache.flink.streaming.controlplane.dispatcher;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
 import org.apache.flink.streaming.controlplane.streammanager.StreamManagerRunner;
 import org.apache.flink.runtime.dispatcher.DispatcherGateway;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
@@ -26,6 +27,7 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.webmonitor.retriever.LeaderGatewayRetriever;
+import org.apache.flink.streaming.controlplane.streammanager.StreamManagerRunnerImpl;
 
 /**
  * @author trx
@@ -34,11 +36,12 @@ import org.apache.flink.runtime.webmonitor.retriever.LeaderGatewayRetriever;
 @FunctionalInterface
 public interface StreamManagerRunnerFactory {
 
-	StreamManagerRunner createStreamManagerRunner(
+	StreamManagerRunnerImpl createStreamManagerRunner(
 		JobGraph jobGraph,
 		Configuration configuration,
 		RpcService rpcService,
 		HighAvailabilityServices highAvailabilityServices,
 		LeaderGatewayRetriever<DispatcherGateway> dispatcherGatewayRetriever,
+		LibraryCacheManager libraryCacheManager,
 		FatalErrorHandler fatalErrorHandler) throws Exception;
 }

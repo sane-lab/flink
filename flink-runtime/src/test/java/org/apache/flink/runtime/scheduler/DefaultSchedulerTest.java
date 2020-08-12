@@ -842,7 +842,8 @@ public class DefaultSchedulerTest extends TestLogger {
 			testRestartBackoffTimeStrategy,
 			testExecutionVertexOperations,
 			executionVertexVersioner,
-			executionSlotAllocatorFactory);
+			executionSlotAllocatorFactory
+		);
 	}
 
 	private void startScheduling(final SchedulerNG scheduler) {

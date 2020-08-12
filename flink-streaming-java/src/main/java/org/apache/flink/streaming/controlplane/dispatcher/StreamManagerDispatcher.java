@@ -27,7 +27,7 @@ import org.apache.flink.runtime.client.DuplicateJobSubmissionException;
 import org.apache.flink.runtime.client.JobSubmissionException;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.concurrent.FutureUtils;
-import org.apache.flink.streaming.controlplane.streammanager.StreamManagerRunner;
+import org.apache.flink.runtime.controlplane.streammanager.StreamManagerGateway;
 import org.apache.flink.runtime.dispatcher.DispatcherException;
 import org.apache.flink.runtime.dispatcher.DispatcherGateway;
 import org.apache.flink.runtime.dispatcher.DispatcherId;
@@ -36,10 +36,7 @@ import org.apache.flink.runtime.highavailability.RunningJobsRegistry;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmanager.JobGraphWriter;
-import org.apache.flink.runtime.jobmaster.JobManagerRunner;
-import org.apache.flink.runtime.jobmaster.JobManagerRunnerImpl;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
-import org.apache.flink.runtime.jobmaster.JobMasterGateway;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
@@ -48,12 +45,15 @@ import org.apache.flink.runtime.rpc.PermanentlyFencedRpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.webmonitor.retriever.LeaderGatewayRetriever;
 import org.apache.flink.runtime.webmonitor.retriever.impl.RpcGatewayRetriever;
+import org.apache.flink.streaming.controlplane.streammanager.StreamManagerRunner;
+import org.apache.flink.streaming.controlplane.streammanager.StreamManagerRunnerImpl;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.BiConsumerWithException;
 import org.apache.flink.util.function.CheckedSupplier;
 import org.apache.flink.util.function.FunctionUtils;
+import org.apache.flink.util.function.FunctionWithException;
 
 import java.io.IOException;
 import java.util.*;
@@ -82,14 +82,14 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 
 	private final FatalErrorHandler fatalErrorHandler;
 
-	private final Map<JobID, CompletableFuture<JobManagerRunner>> jobManagerRunnerFutures;
+	private final Map<JobID, CompletableFuture<StreamManagerRunner>> streamManagerRunnerFutures;
 
 	private final Collection<JobGraph> recoveredJobs;
 
 
 	private StreamManagerRunnerFactory streamManagerRunnerFactory;
 
-	private final Map<JobID, CompletableFuture<Void>> jobManagerTerminationFutures;
+	private final Map<JobID, CompletableFuture<Void>> streamManagerTerminationFutures;
 
 	protected final CompletableFuture<ApplicationStatus> shutDownFuture;
 
@@ -119,11 +119,11 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 
 		this.runningJobsRegistry = highAvailabilityServices.getRunningJobsRegistry();
 
-		jobManagerRunnerFutures = new HashMap<>(16);
+		streamManagerRunnerFutures = new HashMap<>(16);
 
 		this.streamManagerRunnerFactory = dispatcherServices.getStreamManagerRunnerFactory();
 
-		this.jobManagerTerminationFutures = new HashMap<>(2);
+		this.streamManagerTerminationFutures = new HashMap<>(2);
 
 		this.shutDownFuture = new CompletableFuture<>();
 
@@ -206,10 +206,10 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 	public CompletableFuture<Void> onStop() {
 		log.info("Stopping dispatcher {}.", getAddress());
 
-		final CompletableFuture<Void> allJobManagerRunnersTerminationFuture = terminateJobManagerRunnersAndGetTerminationFuture();
+		final CompletableFuture<Void> allStreamManagerRunnersTerminationFuture = terminateStreamManagerRunnersAndGetTerminationFuture();
 
 		return FutureUtils.runAfterwards(
-			allJobManagerRunnersTerminationFuture,
+			allStreamManagerRunnersTerminationFuture,
 			() -> {
 				stopDispatcherServices();
 
@@ -246,9 +246,7 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 					new JobSubmissionException(jobGraph.getJobID(), "Currently jobs is not supported if parts of the vertices have " +
 							"resources configured. The limitation will be removed in future versions."));
 			} else {
-				// TODO: add create StreamManager logic.
 				return internalSubmitJob(jobGraph);
-//				return CompletableFuture.completedFuture(Acknowledge.get());
 			}
 		} catch (FlinkException e) {
 			return FutureUtils.completedExceptionally(e);
@@ -257,15 +255,16 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 
 	private CompletableFuture<Acknowledge> internalSubmitJob(JobGraph jobGraph) {
 		log.info("[SMD] Submitting job {} ({})", jobGraph.getJobID(), jobGraph.getName());
-		// TODO: waitForTerminatingStreamManager
-		final CompletableFuture<Acknowledge> submitDirectly = persistAndRunJob(jobGraph)
+
+		final CompletableFuture<Acknowledge> persistAndRunFuture = waitForTerminatingStreamManager(jobGraph.getJobID(), jobGraph, this::persistAndRunJob)
 			.thenApply(ignored -> Acknowledge.get());
-		return submitDirectly.handleAsync((acknowledge, throwable) -> {
+
+		return persistAndRunFuture.handleAsync((acknowledge, throwable) -> {
 			if (throwable != null) {
-				//TODO: cleanup data
+				cleanUpJobData(jobGraph.getJobID(), true);
 
 				final Throwable strippedThrowable = ExceptionUtils.stripCompletionException(throwable);
-				log.error("Failed to submit job {}.", jobGraph.getJobID(), strippedThrowable);
+				log.error("sm Failed to submit job {}.", jobGraph.getJobID(), strippedThrowable);
 				throw new CompletionException(
 					new JobSubmissionException(jobGraph.getJobID(), "Failed to submit job.", strippedThrowable));
 			} else {
@@ -275,14 +274,13 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 	}
 
 	private CompletableFuture<Void> persistAndRunJob(JobGraph jobGraph) {
-		// TODO: jobGraphWriter
 		final CompletableFuture<Void> runSMFuture = runStreamManager(jobGraph);
 		return runSMFuture.whenComplete(BiConsumerWithException.unchecked((Object ignored, Throwable throwable) -> {
 			if (throwable != null) {
 				final Throwable strippedThrowable = ExceptionUtils.stripCompletionException(throwable);
 
 				log.error("Failed to run stream manager.", strippedThrowable);
-				// jobGraphWriter.removeJobGraph(jobGraph.getJobID());
+			 	jobGraphWriter.removeJobGraph(jobGraph.getJobID());
 			}
 		}));
 	}
@@ -312,6 +310,7 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 					rpcService,
 					highAvailabilityServices, //highAvailabilityServices,
 					dispatcherGatewayRetriever, //heartbeatServices,
+					jobManagerSharedServices.getLibraryCacheManager(),
 					fatalErrorHandler //fatalErrorHandler
 				)),
 			rpcService.getExecutor());
@@ -339,7 +338,7 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 			throw new FlinkException(String.format("Failed to retrieve job scheduling status for job %s.", jobId), e);
 		}
 
-		return jobSchedulingStatus == RunningJobsRegistry.JobSchedulingStatus.DONE || jobManagerRunnerFutures.containsKey(jobId);
+		return jobSchedulingStatus == RunningJobsRegistry.JobSchedulingStatus.DONE || streamManagerRunnerFutures.containsKey(jobId);
 	}
 
 	private boolean isPartialResourceConfigured(JobGraph jobGraph) {
@@ -365,7 +364,7 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 	@Override
 	public CompletableFuture<Collection<JobID>> listJobs(Time timeout) {
 		return CompletableFuture.completedFuture(
-			Collections.unmodifiableSet(new HashSet<>(jobManagerRunnerFutures.keySet())));
+			Collections.unmodifiableSet(new HashSet<>(streamManagerRunnerFutures.keySet())));
 	}
 
 	/**
@@ -378,38 +377,38 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 	private void removeJobAndRegisterTerminationFuture(JobID jobId, boolean cleanupHA) {
 		final CompletableFuture<Void> cleanupFuture = removeJob(jobId, cleanupHA);
 
-		registerJobManagerRunnerTerminationFuture(jobId, cleanupFuture);
+		registerStreamManagerRunnerTerminationFuture(jobId, cleanupFuture);
 	}
 
-	private void registerJobManagerRunnerTerminationFuture(JobID jobId, CompletableFuture<Void> jobManagerRunnerTerminationFuture) {
-		Preconditions.checkState(!jobManagerTerminationFutures.containsKey(jobId));
+	private void registerStreamManagerRunnerTerminationFuture(JobID jobId, CompletableFuture<Void> streamManagerRunnerTerminationFuture) {
+		Preconditions.checkState(!streamManagerTerminationFutures.containsKey(jobId));
 
-		jobManagerTerminationFutures.put(jobId, jobManagerRunnerTerminationFuture);
+		streamManagerTerminationFutures.put(jobId, streamManagerRunnerTerminationFuture);
 
 		// clean up the pending termination future
-		jobManagerRunnerTerminationFuture.thenRunAsync(
+		streamManagerRunnerTerminationFuture.thenRunAsync(
 			() -> {
-				final CompletableFuture<Void> terminationFuture = jobManagerTerminationFutures.remove(jobId);
+				final CompletableFuture<Void> terminationFuture = streamManagerTerminationFutures.remove(jobId);
 
 				//noinspection ObjectEquality
-				if (terminationFuture != null && terminationFuture != jobManagerRunnerTerminationFuture) {
-					jobManagerTerminationFutures.put(jobId, terminationFuture);
+				if (terminationFuture != null && terminationFuture != streamManagerRunnerTerminationFuture) {
+					streamManagerTerminationFutures.put(jobId, terminationFuture);
 				}
 			},
 			getMainThreadExecutor());
 	}
 
 	private CompletableFuture<Void> removeJob(JobID jobId, boolean cleanupHA) {
-		CompletableFuture<JobManagerRunner> jobManagerRunnerFuture = jobManagerRunnerFutures.remove(jobId);
+		CompletableFuture<StreamManagerRunner> streamManagerRunnerFuture = streamManagerRunnerFutures.remove(jobId);
 
-		final CompletableFuture<Void> jobManagerRunnerTerminationFuture;
-		if (jobManagerRunnerFuture != null) {
-			jobManagerRunnerTerminationFuture = jobManagerRunnerFuture.thenCompose(JobManagerRunner::closeAsync);
+		final CompletableFuture<Void> streamManagerRunnerTerminationFuture;
+		if (streamManagerRunnerFuture != null) {
+			streamManagerRunnerTerminationFuture = streamManagerRunnerFuture.thenCompose(StreamManagerRunner::closeAsync);
 		} else {
-			jobManagerRunnerTerminationFuture = CompletableFuture.completedFuture(null);
+			streamManagerRunnerTerminationFuture = CompletableFuture.completedFuture(null);
 		}
 
-		return jobManagerRunnerTerminationFuture.thenRunAsync(
+		return streamManagerRunnerTerminationFuture.thenRunAsync(
 			() -> cleanUpJobData(jobId, cleanupHA),
 			getRpcService().getExecutor());
 	}
@@ -444,21 +443,21 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 	}
 
 	/**
-	 * Terminate all currently running {@link JobManagerRunnerImpl}.
+	 * Terminate all currently running {@link StreamManagerRunnerImpl}.
 	 */
-	private void terminateJobManagerRunners() {
+	private void terminateStreamManagerRunners() {
 		log.info("Stopping all currently running jobs of dispatcher {}.", getAddress());
 
-		final HashSet<JobID> jobsToRemove = new HashSet<>(jobManagerRunnerFutures.keySet());
+		final HashSet<JobID> jobsToRemove = new HashSet<>(streamManagerRunnerFutures.keySet());
 
 		for (JobID jobId : jobsToRemove) {
 			removeJobAndRegisterTerminationFuture(jobId, false);
 		}
 	}
 
-	private CompletableFuture<Void> terminateJobManagerRunnersAndGetTerminationFuture() {
-		terminateJobManagerRunners();
-		final Collection<CompletableFuture<Void>> values = jobManagerTerminationFutures.values();
+	private CompletableFuture<Void> terminateStreamManagerRunnersAndGetTerminationFuture() {
+		terminateStreamManagerRunners();
+		final Collection<CompletableFuture<Void>> values = streamManagerTerminationFutures.values();
 		return FutureUtils.completeAll(values);
 	}
 
@@ -467,7 +466,7 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 	}
 
 	protected void jobNotFinished(JobID jobId) {
-		log.info("Job {} was not finished by JobManager.", jobId);
+		log.info("Job {} was not finished by StreamManager.", jobId);
 
 		removeJobAndRegisterTerminationFuture(jobId, false);
 	}
@@ -478,18 +477,19 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 		onFatalError(new FlinkException(String.format("JobMaster for job %s failed.", jobId), cause));
 	}
 
-	private CompletableFuture<JobMasterGateway> getJobMasterGatewayFuture(JobID jobId) {
-		final CompletableFuture<JobManagerRunner> jobManagerRunnerFuture = jobManagerRunnerFutures.get(jobId);
 
-		if (jobManagerRunnerFuture == null) {
+	private CompletableFuture<StreamManagerGateway> getStreamManagerGatewayFuture(JobID jobId) {
+		final CompletableFuture<StreamManagerRunner> streamManagerRunnerFuture = streamManagerRunnerFutures.get(jobId);
+
+		if (streamManagerRunnerFuture == null) {
 			return FutureUtils.completedExceptionally(new FlinkJobNotFoundException(jobId));
 		} else {
-			final CompletableFuture<JobMasterGateway> leaderGatewayFuture = jobManagerRunnerFuture.thenCompose(JobManagerRunner::getJobMasterGateway);
+			final CompletableFuture<StreamManagerGateway> leaderGatewayFuture = streamManagerRunnerFuture.thenCompose(StreamManagerRunner::getStreamManagerGateway);
 			return leaderGatewayFuture.thenApplyAsync(
-				(JobMasterGateway jobMasterGateway) -> {
+				(StreamManagerGateway streamManagerGateway) -> {
 					// check whether the retrieved JobMasterGateway belongs still to a running JobMaster
-					if (jobManagerRunnerFutures.containsKey(jobId)) {
-						return jobMasterGateway;
+					if (streamManagerRunnerFutures.containsKey(jobId)) {
+						return streamManagerGateway;
 					} else {
 						throw new CompletionException(new FlinkJobNotFoundException(jobId));
 					}
@@ -508,5 +508,31 @@ public abstract class StreamManagerDispatcher extends PermanentlyFencedRpcEndpoi
 	@Override
 	public CompletableFuture<Integer> getBlobServerPort(Time timeout) {
 		return CompletableFuture.completedFuture(blobServer.getPort());
+	}
+
+	private CompletableFuture<Void> waitForTerminatingStreamManager(JobID jobId, JobGraph jobGraph, FunctionWithException<JobGraph, CompletableFuture<Void>, ?> action) {
+		final CompletableFuture<Void> streamManagerTerminationFuture = getStreamManagerTerminationFuture(jobId)
+			.exceptionally((Throwable throwable) -> {
+				throw new CompletionException(
+					new DispatcherException(
+						String.format("Termination of previous StreamManager for job %s failed. Cannot submit job under the same job id.", jobId),
+						throwable));
+			});
+
+		return streamManagerTerminationFuture.thenComposeAsync(
+			FunctionUtils.uncheckedFunction((ignored) -> {
+				streamManagerTerminationFutures.remove(jobId);
+				return action.apply(jobGraph);
+			}),
+			getMainThreadExecutor());
+	}
+
+
+	CompletableFuture<Void> getStreamManagerTerminationFuture(JobID jobId) {
+		if (streamManagerRunnerFutures.containsKey(jobId)) {
+			return FutureUtils.completedExceptionally(new DispatcherException(String.format("sm - Job with job id %s is still running.", jobId)));
+		} else {
+			return streamManagerTerminationFutures.getOrDefault(jobId, CompletableFuture.completedFuture(null));
+		}
 	}
 }

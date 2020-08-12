@@ -41,6 +41,7 @@ import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
+import org.apache.flink.runtime.rescale.JobRescaleCoordinator;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
@@ -64,6 +65,8 @@ import java.util.concurrent.CompletableFuture;
  * will be passed via {@link #setMainThreadExecutor(ComponentMainThreadExecutor)}.
  */
 public interface SchedulerNG {
+
+	JobRescaleCoordinator getJobRescaleCoordinator();
 
 	void setMainThreadExecutor(ComponentMainThreadExecutor mainThreadExecutor);
 

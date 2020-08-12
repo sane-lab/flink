@@ -17,6 +17,7 @@
 
 package org.apache.flink.streaming.controlplane.rescale;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSet;
@@ -36,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -48,15 +50,22 @@ public class StreamJobGraphRescaler extends JobGraphRescaler {
 	}
 
 	@Override
-	public void rescale(JobVertexID id, int newParallelism, Map<Integer, List<Integer>> partitionAssignment, List<JobVertexID> involvedUpstream, List<JobVertexID> involvedDownstream) {
+	public Tuple2<List<JobVertexID>, List<JobVertexID>> rescale(
+		JobVertexID id,
+		int newParallelism,
+		Map<Integer, List<Integer>> partitionAssignment) {
 		JobVertex vertex = jobGraph.findVertexByID(id);
 		vertex.setParallelism(newParallelism);
 
-		repartition(id, partitionAssignment, involvedUpstream, involvedDownstream);
+		return repartition(id, partitionAssignment);
 	}
 
 	@Override
-	public void repartition(JobVertexID id, Map<Integer, List<Integer>> partitionAssignment, List<JobVertexID> involvedUpstream, List<JobVertexID> involvedDownstream) {
+	public Tuple2<List<JobVertexID>, List<JobVertexID>> repartition(
+		JobVertexID id,
+		Map<Integer, List<Integer>> partitionAssignment) {
+		List<JobVertexID> involvedUpstream = new LinkedList<>();
+		List<JobVertexID> involvedDownstream = new LinkedList<>();
 		JobVertex vertex = jobGraph.findVertexByID(id);
 
 		StreamConfig config = new StreamConfig(vertex.getConfiguration());
@@ -99,6 +108,7 @@ public class StreamJobGraphRescaler extends JobGraphRescaler {
 			}
 		}
 		config.setOutEdgesInOrder(targetOutEdges);
+		return Tuple2.of(involvedUpstream, involvedDownstream);
 	}
 
 	@Override

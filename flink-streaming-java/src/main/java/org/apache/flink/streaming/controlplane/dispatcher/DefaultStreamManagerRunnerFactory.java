@@ -20,6 +20,7 @@ package org.apache.flink.streaming.controlplane.dispatcher;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.dispatcher.DispatcherGateway;
+import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
 import org.apache.flink.runtime.webmonitor.retriever.LeaderGatewayRetriever;
 import org.apache.flink.streaming.controlplane.streammanager.StreamManagerConfiguration;
 import org.apache.flink.streaming.controlplane.streammanager.StreamManagerRunner;
@@ -44,12 +45,13 @@ public enum DefaultStreamManagerRunnerFactory implements StreamManagerRunnerFact
     INSTANCE;
 
     @Override
-    public StreamManagerRunner createStreamManagerRunner(
+    public StreamManagerRunnerImpl createStreamManagerRunner(
 		JobGraph jobGraph,
 		Configuration configuration,
 		RpcService rpcService,
 		HighAvailabilityServices highAvailabilityServices,
 		LeaderGatewayRetriever<DispatcherGateway> dispatcherGatewayRetriever,
+		LibraryCacheManager libraryCacheManager,
 		FatalErrorHandler fatalErrorHandler) throws Exception {
 
         final StreamManagerConfiguration streamManagerConfiguration = StreamManagerConfiguration.fromConfiguration(configuration);
@@ -58,6 +60,7 @@ public enum DefaultStreamManagerRunnerFactory implements StreamManagerRunnerFact
                 streamManagerConfiguration,
                 rpcService,
                 highAvailabilityServices,
+				libraryCacheManager,
 				dispatcherGatewayRetriever,
                 fatalErrorHandler
         );
@@ -71,6 +74,7 @@ public enum DefaultStreamManagerRunnerFactory implements StreamManagerRunnerFact
                 jobGraph,
                 streamManagerServiceFactory,
                 highAvailabilityServices,
+				libraryCacheManager,
                 futureExecutor,
                 fatalErrorHandler);
     }

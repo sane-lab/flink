@@ -51,6 +51,7 @@ public class TestingStreamManager extends StreamManager {
 			streamManagerConfiguration,
 			resourceId,
 			jobGraph,
+			null,
 			highAvailabilityService,
 			jobLeaderIdService,
 			dispatcherGatewayRetriever,
@@ -59,8 +60,8 @@ public class TestingStreamManager extends StreamManager {
 	}
 
 	@Override
-	public CompletableFuture<RegistrationResponse> registerJobManager(JobMasterId jobMasterId, ResourceID jobManagerResourceId, String jobManagerAddress, JobID jobId, Time timeout) {
+	public CompletableFuture<RegistrationResponse> registerJobManager(JobMasterId jobMasterId, ResourceID jobManagerResourceId, String jobManagerAddress, JobID jobId,ClassLoader userCodeLoader ,Time timeout) {
 		isRegisterJob.complete(Acknowledge.get());
-		return super.registerJobManager(jobMasterId, jobManagerResourceId, jobManagerAddress, jobId, timeout);
+		return super.registerJobManager(jobMasterId, jobManagerResourceId, jobManagerAddress, jobId, userCodeLoader, timeout);
 	}
 }

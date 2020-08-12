@@ -1,4 +1,4 @@
-package org.apache.flink.runtime.rescale.controller;
+package org.apache.flink.streaming.controlplane.rescale.controller;
 
 import java.util.List;
 import java.util.Map;

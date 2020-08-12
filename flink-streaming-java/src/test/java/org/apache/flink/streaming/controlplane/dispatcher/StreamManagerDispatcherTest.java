@@ -26,7 +26,7 @@ import org.apache.flink.runtime.blob.BlobServer;
 import org.apache.flink.runtime.blob.VoidBlobStore;
 import org.apache.flink.runtime.checkpoint.StandaloneCheckpointRecoveryFactory;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
-import org.apache.flink.streaming.controlplane.streammanager.StreamManagerRunner;
+import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
 import org.apache.flink.runtime.dispatcher.*;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
@@ -390,17 +390,17 @@ public class StreamManagerDispatcherTest extends TestLogger {
 		}
 
 		@Override
-		public StreamManagerRunner createStreamManagerRunner(
+		public StreamManagerRunnerImpl createStreamManagerRunner(
 			JobGraph jobGraph,
 			Configuration configuration,
 			RpcService rpcService,
 			HighAvailabilityServices highAvailabilityServices,
 			LeaderGatewayRetriever<DispatcherGateway> dispatcherGatewayRetriever,
-			FatalErrorHandler fatalErrorHandler) throws Exception {
+			LibraryCacheManager libraryCacheManager, FatalErrorHandler fatalErrorHandler) throws Exception {
 
 			final StreamManagerConfiguration streamManagerConfiguration = StreamManagerConfiguration.fromConfiguration(configuration);
 
-			final StreamManagerServiceFactory streamManagerServiceFactory = jobGraph1 -> {
+			final StreamManagerServiceFactory streamManagerServiceFactory = (jobGraph1, userCodeLoader) -> {
 				final StreamManagerRuntimeServices streamManagerRuntimeServices = StreamManagerRuntimeServices.fromConfiguration(
 					streamManagerConfiguration,
 					highAvailabilityServices,
@@ -426,7 +426,7 @@ public class StreamManagerDispatcherTest extends TestLogger {
 				jobGraph,
 				streamManagerServiceFactory,
 				highAvailabilityServices,
-				futureExecutor,
+				libraryCacheManager, futureExecutor,
 				fatalErrorHandler);
 		}
 	}
@@ -444,13 +444,13 @@ public class StreamManagerDispatcherTest extends TestLogger {
 		}
 
 		@Override
-		public StreamManagerRunner createStreamManagerRunner(
+		public StreamManagerRunnerImpl createStreamManagerRunner(
 			JobGraph jobGraph,
 			Configuration configuration,
 			RpcService rpcService,
 			HighAvailabilityServices highAvailabilityServices,
 			LeaderGatewayRetriever<DispatcherGateway> dispatcherGatewayRetriever,
-			FatalErrorHandler fatalErrorHandler) {
+			LibraryCacheManager libraryCacheManager, FatalErrorHandler fatalErrorHandler) {
 
 			createdJobManagerRunnerLatch.countDown();
 
@@ -461,7 +461,7 @@ public class StreamManagerDispatcherTest extends TestLogger {
 					rpcService,
 					highAvailabilityServices,
 					dispatcherGatewayRetriever,
-					fatalErrorHandler);
+					null, fatalErrorHandler);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
