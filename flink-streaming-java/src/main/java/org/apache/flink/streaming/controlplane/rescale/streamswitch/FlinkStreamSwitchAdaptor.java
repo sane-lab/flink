@@ -13,10 +13,7 @@ import org.apache.flink.streaming.controlplane.rescale.controller.OperatorContro
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.apache.flink.runtime.rescale.JobRescaleAction.ActionType.REPARTITION;
 import static org.apache.flink.runtime.rescale.JobRescaleAction.ActionType.SCALE_OUT;
@@ -54,19 +51,15 @@ public class FlinkStreamSwitchAdaptor {
 //			if (!entry.getValue().getName().toLowerCase().contains("join") && !entry.getValue().getName().toLowerCase().contains("window")) {
 //				continue;
 //			}
-			FlinkOperatorController controller;
-
-			if (jobVertex.getName().toLowerCase().contains("map")) {
-//				controller = new DummyStreamSwitch("map");
+			final FlinkOperatorController controller;
+			if(jobVertex.getName().equals("near source Flatmap")){
+				controller = ConfigurableDummyStreamSwitch.createFromPara(
+					RescaleActionDescriptor.BaseRescaleAction.ActionType.SCALE_OUT,
+					2);
+			}else {
 				continue;
-			} else if (jobVertex.getName().toLowerCase().contains("filter")) {
-				controller = new DummyStreamSwitch("filter");
-			} else {
-				controller = ConfigurableDummyStreamSwitch.createFromJobVertex(jobVertex.getName());
-				if (controller == null) {
-					continue;
-				}
 			}
+
 			config.setString("vertex_id", vertexID.toString());
 //			FlinkOperatorController controller = new LatencyGuarantor(config);
 			OperatorControllerListener listener = new OperatorControllerListenerImpl(vertexID, parallelism, maxParallelism);

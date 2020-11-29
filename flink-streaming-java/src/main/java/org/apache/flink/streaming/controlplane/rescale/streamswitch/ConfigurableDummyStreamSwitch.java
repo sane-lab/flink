@@ -19,7 +19,7 @@ public class ConfigurableDummyStreamSwitch implements FlinkOperatorController, R
 
 	private OperatorControllerListener listener;
 
-	Map<String, List<String>> executorMapping;
+	final Map<String, List<String>> executorMapping;
 
 	private volatile boolean waitForMigrationDeployed;
 
@@ -35,6 +35,7 @@ public class ConfigurableDummyStreamSwitch implements FlinkOperatorController, R
 
 	public ConfigurableDummyStreamSwitch(String name) {
 		this.name = name;
+		this.executorMapping = new HashMap<>();
 	}
 
 	private void setRescaleAction(List<RescaleActionDescriptor.BaseRescaleAction> actionList) {
@@ -83,23 +84,31 @@ public class ConfigurableDummyStreamSwitch implements FlinkOperatorController, R
 			return null;
 	}
 
+	public static ConfigurableDummyStreamSwitch createFromPara(
+		RescaleActionDescriptor.BaseRescaleAction.ActionType actionType,
+		int parallelism) {
+
+		List<RescaleActionDescriptor.BaseRescaleAction> actionList = Collections.singletonList(
+			new RescaleActionDescriptor.SimpleRescaleAction(actionType, parallelism));
+		ConfigurableDummyStreamSwitch dummyStreamSwitch = new ConfigurableDummyStreamSwitch("dummy stream switch");
+		dummyStreamSwitch.setRescaleAction(actionList);
+		return dummyStreamSwitch;
+	}
+
 	@Override
 	public void init(OperatorControllerListener listener, List<String> executors, List<String> partitions) {
 		this.listener = listener;
-
-		this.executorMapping = new HashMap<>();
-
 		int numExecutors = executors.size();
 		int numPartitions = partitions.size();
 		for (int executorId = 0; executorId < numExecutors; executorId++) {
 			List<String> executorPartitions = new ArrayList<>();
-			executorMapping.put(String.valueOf(executorId), executorPartitions);
 
 			KeyGroupRange keyGroupRange = KeyGroupRangeAssignment.computeKeyGroupRangeForOperatorIndex(
 				numPartitions, numExecutors, executorId);
 			for (int i = keyGroupRange.getStartKeyGroup(); i <= keyGroupRange.getEndKeyGroup(); i++) {
 				executorPartitions.add(String.valueOf(i));
 			}
+			executorMapping.put(String.valueOf(executorId), Collections.unmodifiableList(executorPartitions));
 		}
 
 		this.random = new Random();
@@ -183,46 +192,51 @@ public class ConfigurableDummyStreamSwitch implements FlinkOperatorController, R
 	/**
 	 * This method can only be called once.
 	 * If new parallelism == old parallelism, it is repartition,
-	 *	 will move half target sub task partition to destination sub task
+	 * will move half target sub task partition to destination sub task
 	 * if new parallelism > old parallelism, it is scale out,
-	 *   will move half target sub task partition to new added sub task
+	 * will move half target sub task partition to new added sub task
 	 * if new parallelism < old parallelism, it is scale in,
-	 *   will move all target sub task partition to destination sub task,
-	 *
+	 * will move all target sub task partition to destination sub task,
+	 * <p>
 	 * NOTICE: we suppose that the different between old and new parallelism is not more than one if wanting scale out
 	 *
 	 * @param newParallelism
 	 */
 	private void preparePartitionAssignment(int newParallelism) {
 		int oldParallelism = executorMapping.size();
+		Map<String, List<String>> map = new HashMap<>();
+		executorMapping.forEach((k, v)-> map.put(k, new ArrayList<>(v)));
+
 		for (int i = 0; i < newParallelism; i++) {
-			executorMapping.putIfAbsent(String.valueOf(i), new ArrayList<>());
+			map.putIfAbsent(String.valueOf(i), new ArrayList<>());
 		}
 		final int rangeSize = 128 / oldParallelism;
-		if(newParallelism >= oldParallelism){
+		if (newParallelism >= oldParallelism) {
 			// scale out & repartition
-			List<String> firstSubTask =  executorMapping.get("0");
+			List<String> firstSubTask = map.get("0");
 			List<String> originKeys = new ArrayList<>(firstSubTask.size());
 			List<String> otherKeys = new ArrayList<>(firstSubTask.size());
-			for(int i=0;i<firstSubTask.size();i++){
-				if(i%2==0){
+			for (int i = 0; i < firstSubTask.size(); i++) {
+				if (i % 2 == 0) {
 					originKeys.add(firstSubTask.get(i));
-				}else {
+				} else {
 					otherKeys.add(firstSubTask.get(i));
 				}
 			}
-			executorMapping.put("0", originKeys);
-			executorMapping.get(String.valueOf(newParallelism-1)).addAll(otherKeys);
-		}else {
+			map.put("0", originKeys);
+			map.get(String.valueOf(newParallelism - 1)).addAll(otherKeys);
+		} else {
 			// scale in
-			List<String> originKeys = new ArrayList<>(rangeSize * (oldParallelism-newParallelism));
-			for(int i=newParallelism;i<oldParallelism;i++){
-				List<String> lastSubTask =  executorMapping.get(String.valueOf(i));
+			List<String> originKeys = new ArrayList<>(rangeSize * (oldParallelism - newParallelism));
+			for (int i = newParallelism; i < oldParallelism; i++) {
+				List<String> lastSubTask = map.get(String.valueOf(i));
 				originKeys.addAll(lastSubTask);
 				lastSubTask.clear();
 			}
-			executorMapping.get("0").addAll(originKeys);
+			map.get("0").addAll(originKeys);
 		}
+		executorMapping.clear();
+		map.forEach((k, v)-> executorMapping.put(k, Collections.unmodifiableList(v)));
 	}
 
 	private void testRepartition() throws InterruptedException {
