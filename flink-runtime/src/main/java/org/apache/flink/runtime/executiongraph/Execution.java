@@ -1010,7 +1010,7 @@ public class Execution implements AccessExecution, Archiveable<ArchivedExecution
 		}
 	}
 
-	public CompletableFuture<Void> scheduleForInterTaskSync(int syncFlag, ReconfigID reconfigID) {
+	public CompletableFuture<Void> prepareForSync(int syncFlag, ReconfigID reconfigID, List<Integer> affectedKeys) {
 
 		assertRunningInJobMasterMainThread();
 
@@ -1030,7 +1030,7 @@ public class Execution implements AccessExecution, Archiveable<ArchivedExecution
 				vertex.getExecutionGraph().getJobMasterMainThreadExecutor();
 
 			return CompletableFuture
-				.supplyAsync(() -> taskManagerGateway.scheduleSync(attemptId, syncFlag, reconfigID, rpcTimeout), executor)
+				.supplyAsync(() -> taskManagerGateway.prepareForSync(attemptId, syncFlag, reconfigID, rpcTimeout), executor)
 				.thenCompose(Function.identity())
 				.handleAsync((ack, failure) -> {
 					if (failure != null) {
@@ -1048,7 +1048,6 @@ public class Execution implements AccessExecution, Archiveable<ArchivedExecution
 		}
 		return FutureUtils.completedVoidFuture();
 	}
-
 
 	public CompletableFuture<Void> scheduleOperatorUpdate(OperatorID operatorID) {
 
@@ -1154,7 +1153,6 @@ public class Execution implements AccessExecution, Archiveable<ArchivedExecution
 					}
 					return null;
 				}, jobMasterMainThreadExecutor);
-
 		}
 		catch (Throwable t) {
 			markFailed(t);

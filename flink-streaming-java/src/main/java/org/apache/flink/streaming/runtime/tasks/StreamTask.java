@@ -1293,6 +1293,23 @@ public abstract class StreamTask<OUT, OP extends StreamOperator<OUT>>
 			actionExecutor.runThrowing(() -> {
 				this.idInModel = idInModel;
 
+				List<Integer> migrateOutKeygroup = new ArrayList<>();
+				// find out the affected keys by checking the updated keygrouprange
+				for (int keyGroup = assignedKeyGroupRange.getStartKeyGroup(); keyGroup < assignedKeyGroupRange.getEndKeyGroup()+1; keyGroup++) {
+					int hashedKeygroup = assignedKeyGroupRange.mapFromAlignedToHashed(keyGroup);
+					if (!keyGroupRange.containsHashedKeyGroup(hashedKeygroup)) {
+						migrateOutKeygroup.add(hashedKeygroup);
+					}
+				}
+				// find out migrate in keygroup
+				List<Integer> migrateInKeygroup = new ArrayList<>();
+				for (int keyGroup = keyGroupRange.getStartKeyGroup(); keyGroup < keyGroupRange.getEndKeyGroup()+1; keyGroup++) {
+					int hashedKeygroup = keyGroupRange.mapFromAlignedToHashed(keyGroup);
+					if (!assignedKeyGroupRange.containsHashedKeyGroup(hashedKeygroup)) {
+						migrateInKeygroup.add(hashedKeygroup);
+					}
+				}
+
 				updateState(keyGroupRange, getEnvironment().getTaskInfo().getMaxNumberOfParallelSubtasks());
 //				initializeStateAndOpen();
 

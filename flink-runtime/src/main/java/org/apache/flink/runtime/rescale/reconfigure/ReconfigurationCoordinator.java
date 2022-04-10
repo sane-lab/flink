@@ -951,9 +951,11 @@ public class ReconfigurationCoordinator extends AbstractCoordinator {
 		private final CompletableFuture<Map<OperatorID, OperatorState>> finishedFuture;
 
 		private final CompletableFuture<Void> fullyAckedFuture = new CompletableFuture<>();
+		private final List<Tuple2<Integer, Integer>> taskList;
 		private long checkpointId;
 
 		SynchronizeOperation(List<Tuple2<Integer, Integer>> taskList) {
+			this.taskList = taskList;
 			this.jobVertexIdList = taskList.stream()
 				.map(t -> rawVertexIDToJobVertexID(t.f0))
 				.collect(Collectors.toList());
@@ -970,6 +972,7 @@ public class ReconfigurationCoordinator extends AbstractCoordinator {
 //					.map(t -> Tuple2.of(rawId, t))
 //					.collect(Collectors.toList()));
 //			}
+			this.taskList = taskList;
 			this.jobVertexIdList = taskList.stream()
 				.map(t -> rawVertexIDToJobVertexID(t.f0))
 				.collect(Collectors.toList());
@@ -981,7 +984,11 @@ public class ReconfigurationCoordinator extends AbstractCoordinator {
 		private CompletableFuture<Map<OperatorID, OperatorState>> sync() throws ExecutionGraphException {
 			// add needed acknowledge tasks
 			List<CompletableFuture<Void>> affectedExecutionPrepareSyncFutures = new LinkedList<>();
-			for (JobVertexID jobVertexId : jobVertexIdList) {
+			for (Tuple2<Integer, Integer> tuple : taskList) {
+				int operatorID = tuple.f0;
+				JobVertexID jobVertexId = rawVertexIDToJobVertexID(tuple.f0);
+//				for (JobVertexID jobVertexId : jobVertexIdList) {
+				OperatorWorkloadsAssignment remappingAssignment = workloadsAssignmentHandler.getHeldOperatorWorkloadsAssignment(operatorID);
 				ExecutionJobVertex executionJobVertex = executionGraph.getJobVertex(jobVertexId);
 				checkNotNull(executionJobVertex, "can not find the job vertex" + jobVertexId);
 				List<ExecutionVertex> affectededVertices = getAfftectedVertices(executionJobVertex);
@@ -995,12 +1002,17 @@ public class ReconfigurationCoordinator extends AbstractCoordinator {
 						.filter(execution -> execution != null &&
 							(execution.getState() == ExecutionState.RUNNING || execution.getState() == ExecutionState.DEPLOYING))
 						.forEach(execution -> {
+//							if (remappingAssignment.isTaskModified(execution.getParallelSubtaskIndex())) {
+//								// if the task is task to migrate state, try to find out the migrate-out state, which should be snapshotted for migration
+//								execution.prepareForSync(TaskOperatorManager.NEED_SYNC_REQUEST, reconfigID, null);
+//							} else {
 								affectedExecutionPrepareSyncFutures.add(
-									execution.scheduleForInterTaskSync(TaskOperatorManager.NEED_SYNC_REQUEST, reconfigID));
+									execution.prepareForSync(TaskOperatorManager.NEED_SYNC_REQUEST, reconfigID, null));
 								notYetAcknowledgedTasks.add(execution.getAttemptId());
-							}
-						);
+//							}
+						});
 				}
+//				}
 			}
 
 			// sync tasks to be removed in the new configuration
@@ -1008,7 +1020,7 @@ public class ReconfigurationCoordinator extends AbstractCoordinator {
 			for (Map.Entry<Integer, List<ExecutionVertex>> entry : removedCandidates.entrySet()) {
 				for (ExecutionVertex vertex :  entry.getValue()) {
 					Execution execution = vertex.getCurrentExecutionAttempt();
-					affectedExecutionPrepareSyncFutures.add(execution.scheduleForInterTaskSync(TaskOperatorManager.NEED_SYNC_REQUEST, reconfigID));
+					affectedExecutionPrepareSyncFutures.add(execution.prepareForSync(TaskOperatorManager.NEED_SYNC_REQUEST, reconfigID, null));
 					notYetAcknowledgedTasks.add(execution.getAttemptId());
 				}
 			}
@@ -1084,7 +1096,7 @@ public class ReconfigurationCoordinator extends AbstractCoordinator {
 					isSourceResumed = true;
 				} else {
 					Execution execution = operatedVertex.getCurrentExecutionAttempt();
-					affectedExecutionPrepareSyncFutures.add(execution.scheduleForInterTaskSync(TaskOperatorManager.NEED_RESUME_REQUEST, reconfigID));
+					affectedExecutionPrepareSyncFutures.add(execution.prepareForSync(TaskOperatorManager.NEED_RESUME_REQUEST, reconfigID, null));
 				}
 			}
 			// make affected task resume

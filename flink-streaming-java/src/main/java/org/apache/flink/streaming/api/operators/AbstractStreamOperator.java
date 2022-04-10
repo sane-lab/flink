@@ -317,7 +317,6 @@ public abstract class AbstractStreamOperator<OUT>
 		if (keyedStateBackend instanceof HeapKeyedStateBackend) {
 			((HeapKeyedStateBackend) keyedStateBackend).updateKeyGroupOffset();
 		}
-		// TODO: need to read the snapshot and restore the state table.
 	}
 
 	private static void closeFromRegistry(Closeable closeable, CloseableRegistry registry) {

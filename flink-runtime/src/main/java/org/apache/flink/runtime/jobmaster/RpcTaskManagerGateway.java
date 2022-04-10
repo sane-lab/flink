@@ -20,7 +20,6 @@ package org.apache.flink.runtime.jobmaster;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.deployment.TaskDeploymentDescriptor;
@@ -80,9 +79,9 @@ public class RpcTaskManagerGateway implements TaskManagerGateway {
 	}
 
 	@Override
-	public CompletableFuture<Acknowledge> scheduleSync(ExecutionAttemptID executionAttemptID, int syncFlag, ReconfigID reconfigID,
-													   @RpcTimeout Time timeout) {
-		return taskExecutorGateway.scheduleSync(executionAttemptID, syncFlag, reconfigID, timeout);
+	public CompletableFuture<Acknowledge> prepareForSync(ExecutionAttemptID executionAttemptID, int syncFlag, ReconfigID reconfigID,
+														 @RpcTimeout Time timeout) {
+		return taskExecutorGateway.prepareForSync(executionAttemptID, syncFlag, reconfigID, timeout);
 	}
 
 	@Override

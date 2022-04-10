@@ -663,7 +663,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 					tdd.getProducedPartitions(),
 					tdd.getInputGates());
 
-				if(RescaleOptions.PREPARE_ONLY.equals(rescaleOptions)){
+				if(RescaleOptions.PREPARE_ONLY.equals(rescaleOptions)) {
 					return CompletableFuture.completedFuture(Acknowledge.get());
 				}
 
@@ -699,11 +699,11 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 	}
 
 	@Override
-	public CompletableFuture<Acknowledge> scheduleSync(
+	public CompletableFuture<Acknowledge> prepareForSync(
 		ExecutionAttemptID executionAttemptID,
 		int syncFlag,
 		ReconfigID reconfigID,
-		@RpcTimeout Time timeout){
+		@RpcTimeout Time timeout) {
 		final Task task = taskSlotTable.getTask(executionAttemptID);
 		if (task != null) {
 			try {
@@ -725,7 +725,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 		ExecutionAttemptID executionAttemptID,
 		TaskDeploymentDescriptor tdd,
 		OperatorID operatorID,
-		@RpcTimeout Time timeout){
+		@RpcTimeout Time timeout) {
 		final Task task = taskSlotTable.getTask(executionAttemptID);
 		if (task != null) {
 			try {

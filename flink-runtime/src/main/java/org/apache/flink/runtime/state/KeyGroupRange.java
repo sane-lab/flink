@@ -95,6 +95,10 @@ public class KeyGroupRange implements KeyGroupsList, Serializable {
 		}
 	}
 
+	public boolean containsHashedKeyGroup(int hashedKeyGroup) {
+		return fromAlignedToHashed.isEmpty() ? contains(hashedKeyGroup) : fromAlignedToHashed.containsKey(hashedKeyGroup);
+	}
+
 	/**
 	 * Checks whether or not a single key-group is contained in the range.
 	 *

@@ -112,9 +112,9 @@ public class SimpleAckingTaskManagerGateway implements TaskManagerGateway {
 	}
 
 	@Override
-	public CompletableFuture<Acknowledge> scheduleSync(ExecutionAttemptID executionAttemptID,
-													   int syncFlag, ReconfigID reconfigID,
-													   Time timeout) {
+	public CompletableFuture<Acknowledge> prepareForSync(ExecutionAttemptID executionAttemptID,
+														 int syncFlag, ReconfigID reconfigID,
+														 Time timeout) {
 		return CompletableFuture.completedFuture(Acknowledge.get());
 	}
 

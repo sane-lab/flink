@@ -99,7 +99,7 @@ public interface TaskExecutorGateway extends RpcGateway {
 		RescaleOptions rescaleOptions,
 		@RpcTimeout Time timeout);
 
-	CompletableFuture<Acknowledge> scheduleSync(
+	CompletableFuture<Acknowledge> prepareForSync(
 		ExecutionAttemptID executionAttemptID,
 		int syncFlag,
 		ReconfigID reconfigID,

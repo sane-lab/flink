@@ -80,7 +80,7 @@ public interface TaskManagerGateway {
 		RescaleOptions rescaleOptions,
 		Time timeout);
 
-	CompletableFuture<Acknowledge> scheduleSync(
+	CompletableFuture<Acknowledge> prepareForSync(
 		ExecutionAttemptID executionAttemptID,
 		int syncFlag,
 		ReconfigID reconfigID,

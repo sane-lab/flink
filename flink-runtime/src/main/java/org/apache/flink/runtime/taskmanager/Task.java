@@ -1293,7 +1293,6 @@ public class Task implements Runnable, TaskSlotPayload, TaskActions, PartitionPr
 		invokable.updateKeyGroupRange(keyGroupRange);
 		// make sure always call finish in Task
 		taskRescaleManager.finish();
-//		throw new IllegalArgumentException("assignNewState is not suppported now.");
 	}
 
 	public void createNewResultPartitions() throws IOException {
